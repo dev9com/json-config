@@ -1,0 +1,155 @@
+import com.typesafe.config.*;
+
+apply plugin: 'base'
+
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath('com.typesafe:config:1.1.0-9f31d6308e7ebbc3d7904b64ebb9f61f7e22a968') {
+            exclude(group: 'com.typesafe.sbteclipse')
+        }
+    }
+}
+
+version = buildVersion
+group = "com.dev9.github.jsonconfig"
+description = "dev9 configuration compiler"
+    
+ext {
+    artifactId = "config-json"
+    environments = ['default', 'dev', 'qa', 'stage', 'prod']
+    bundles = fileTree(dir: 'src/main/bundles', include: '*.conf').files*.name*.replace('.conf', '')
+    workOutputFile = file("build/work/work.conf")
+    resolvePartial = ConfigResolveOptions.defaults().setAllowUnresolved(true)
+}
+
+defaultTasks 'assemble'
+tasks.assemble.dependsOn 'bundle'
+
+task bundle (dependsOn: 'generate', type: Tar) {
+    description = "Creates the final tar.gz archive of the generated config files"
+    compression = Compression.GZIP
+    into "${artifactId}-${version}"
+    from("$buildDir") {
+        exclude "distributions"
+        exclude "work"
+    }
+}
+
+task generate {
+    environments.each { 
+        dependsOn "gen_${it}" 
+    }
+}
+
+environments.each { env ->
+    // Generate a master task to generate all files for one env
+    task "gen_${env}"(dependsOn: ["gen_${env}_full", "gen_${env}_bundles"]) {
+
+    }
+
+    // Generate the full config for this environment
+    task "gen_${env}_full"(dependsOn: 'mergeConfigFiles') {
+        ext.outputFile = file("build/${env}/config.json")
+
+        inputs.file(workOutputFile)
+        outputs.file(outputFile)
+
+        doLast {
+            def config = ConfigFactory.parseFile(workOutputFile)
+            def envConfig = config.hasPath(env) ? config.getConfig(env) : ConfigFactory.empty()
+            envConfig = envConfig.withFallback(config.getConfig('default')).resolve(resolvePartial)
+
+            outputFile.write(pretty(envConfig))
+        }
+    }
+    
+    // This bundles task adds dependencies on all the individual bundle tasks
+    task "gen_${env}_bundles" {
+        bundles.each { 
+            dependsOn "gen_${env}_bundle_${it}" 
+        }
+    }
+
+    bundles.each { bundle -> 
+        task "gen_${env}_bundle_${bundle}"(dependsOn: "gen_${env}_full") {
+            ext.bundleFile = file("src/main/bundles/${bundle}.conf")
+            ext.inputFile = file("build/${env}/config.json")
+            ext.outputFile = file("build/${env}/${bundle}.json")
+
+            inputs.files(bundleFile, inputFile)
+            outputs.file(outputFile)
+
+            doLast {
+                def fullConfig = ConfigFactory.parseFile(inputFile)
+                def bundleConfig = ConfigFactory.parseFile(bundleFile)
+                def bundleOutput = ConfigFactory.empty();
+
+                if ( bundleConfig.hasPath('includes') )
+                {
+                    bundleConfig.getStringList('includes').each { include -> 
+                        bundleOutput = bundleOutput.withFallback(fullConfig.getObject(include).atPath(include))
+                    }
+                }
+                else
+                {
+                    bundleOutput = bundleOutput.withFallback(fullConfig)   
+                }
+
+                if ( bundleConfig.hasPath('remove') )
+                {
+                    bundleConfig.getStringList('remove').each { remove ->
+                        if ( bundleOutput.hasPath(remove) )
+                            bundleOutput = bundleOutput.withoutPath(remove)
+                    }
+                }
+
+                outputFile.write(pretty(bundleOutput.resolve(resolvePartial)))
+            }
+        }
+    }
+}
+
+task createWorkingDirectories {
+    environments.each { 
+        outputs.file(file("build/${it}"))
+    }
+
+    doLast {
+        environments.each { 
+            file("build/${it}").mkdirs()
+        }
+    }
+}
+
+task mergeConfigFiles(dependsOn: 'createWorkingDirectories') {
+    ext.allFiles = fileTree(dir: 'src/main/conf', include: '*.conf')
+    ext.outputFile = workOutputFile
+
+    inputs.files(allFiles)
+    outputs.file(outputFile)
+
+    doLast {
+        ant.concat(destfile: outputFile, fixlastline: 'yes') {
+            allFiles.each {
+                fileset(file: it)
+            }
+        }
+    }
+}
+
+def pretty(Config config) {
+    config.root().render(ConfigRenderOptions.concise().setFormatted(true))
+}
+
+def prettyPrint(Config config) {
+    println pretty(config)
+}
+
+// This task gets the gradlew scripts and the jar file for us.
+// Use this to upgrade gradle versions. 
+task createWrapper(type: Wrapper) {
+    gradleVersion = '1.10'
+}
