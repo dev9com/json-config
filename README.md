@@ -1,6 +1,6 @@
 # json-config #
 
-This project builds the JSON configuration for Classmates.com. 
+This project builds the JSON configuration based on Typesafe Config HOCON inputs 
 
 ## Usage ##
 
@@ -26,9 +26,9 @@ Each file should include a block for defaults, named ```default```. This is the 
         }
     }
     
-    qa09 {
+    qa {
         db: ${default.db} {
-            host: "qa09-db.cmates.com"
+            host: "qa-db.example.com"
         }
     }
 
@@ -40,7 +40,7 @@ This builder does a few things. It creates a file in ```build/{env}/config.json`
 
 ## Heirarchical Config ##
 
-Look at that qa09.db section again. See the ${default.db}? That's basically telling Typesafe Config to take the ${default.db} object, and lay the rest of the object on top of it, overriding any duplicate properties that exist, and merging smartly for all nested objects. This is the core of how all of the individual files work, and the core of Heirarchical Configuration. Imagine all of the files are concatenated together, you might end up with an intermediate file like this: 
+Look at that qa.db section again. See the ${default.db}? That's basically telling Typesafe Config to take the ${default.db} object, and lay the rest of the object on top of it, overriding any duplicate properties that exist, and merging smartly for all nested objects. This is the core of how all of the individual files work, and the core of Heirarchical Configuration. Imagine all of the files are concatenated together, you might end up with an intermediate file like this: 
 
     default {
         db { 
@@ -49,9 +49,9 @@ Look at that qa09.db section again. See the ${default.db}? That's basically tell
         }
     }
     
-    qa09 {
+    qa {
         db: ${default.db} {
-            host: "qa09-db.cmates.com"
+            host: "qa-db.cmates.com"
         }
     }
     
@@ -65,13 +65,13 @@ Look at that qa09.db section again. See the ${default.db}? That's basically tell
         }
     }
     
-    qa09 {
+    qa {
         msg: ${default.msg} {
             hello: "doggie"
         }
     }
     
-    qa00 {
+    stage {
         msg: {
             wat: "wat?"
         }
@@ -94,11 +94,11 @@ Once we go through a process called "resolution", you would end up with a config
         }
     }
     
-    qa09 {
+    qa {
         db {
             user: "user"
             password: "password"
-            host: "qa09-db.cmates.com"
+            host: "qa-db.example.com"
         }
     
         msg {
@@ -110,7 +110,7 @@ Once we go through a process called "resolution", you would end up with a config
         }
     }
     
-    qa00 {
+    stage {
         msg {
             wat: "wat?
         }
@@ -143,14 +143,14 @@ In order to use these files in the best way possible, this is our understanding 
 The upshot of all of this, in heirarchical terms, results in loading files and resolving values in this order: 
 
 0. From the environment and command line parameters. 
-1. From ${user.home}/.cm-config-local.json
+1. From ${user.home}/.config-local.json
 2. From /opt/cmates/config/{env}/secret.json (if env is available)
 3. From /opt/cmates/config/{env}/config.json (if env is available)
 4. From /opt/cmates/config/default/config.json
 
 In order to do overrides through the environment or command line, use dotted notation. For example, to replace the db host in our examples above, you could do something like this: 
 
-    $> java (everything else) -Ddb.host="new-db.cmates.com"
+    $> java (everything else) -Ddb.host="new-db.example.com"
 
 As for querying the environment, you can simply run the process with environment variables on the command line, or they can exist already: 
 
@@ -163,7 +163,7 @@ Look for an example of this in our software-reasearch project on git.
 
 ### Extend or Inherit? ###
 
-Notice we were extending the default block in the db example above to fill in the rest of the guts for the db block for qa09. We could also rely on the heirarchy filling in those values from the default config file. What to do? In an unsatisfying reoslution, this is a judgement call. 
+Notice we were extending the default block in the db example above to fill in the rest of the guts for the db block for qa. We could also rely on the heirarchy filling in those values from the default config file. What to do? In an unsatisfying reoslution, this is a judgement call. 
 
 With extension, we get more fully fleshed-out JSON files at the build stage, and we can visually inspect for any errors. The downside is that the files might be significantly larger. 
 
