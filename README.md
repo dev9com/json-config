@@ -38,9 +38,9 @@ In the example above, notice the relaxed structure of JSON: no root object brace
 
 This builder does a few things. It creates a file in ```build/{env}/config.json``` that is the full set of properties compiled for that environment. In addition, we are supporting the generation of a limited subset of that config file, a term we are calling bundles. To create a new bundle, simply add a file at ```src/bundles/{bundle}.conf```. Look at the README.md in that directory if you want more specific information around bundles. The generated files will be placed at ```build/{env}/{bundle}.json```. 
 
-## Heirarchical Config ##
+## Hierarchical Config ##
 
-Look at that qa.db section again. See the ${default.db}? That's basically telling Typesafe Config to take the ${default.db} object, and lay the rest of the object on top of it, overriding any duplicate properties that exist, and merging smartly for all nested objects. This is the core of how all of the individual files work, and the core of Heirarchical Configuration. Imagine all of the files are concatenated together, you might end up with an intermediate file like this: 
+Look at that qa.db section again. See the ${default.db}? That's basically telling Typesafe Config to take the ${default.db} object, and lay the rest of the object on top of it, overriding any duplicate properties that exist, and merging smartly for all nested objects. This is the core of how all of the individual files work, and the core of Hierarchical Configuration. Imagine all of the files are concatenated together, you might end up with an intermediate file like this: 
 
     default {
         db { 
@@ -51,7 +51,7 @@ Look at that qa.db section again. See the ${default.db}? That's basically tellin
     
     qa {
         db: ${default.db} {
-            host: "qa-db.cmates.com"
+            host: "qa-db.example.com"
         }
     }
     
@@ -134,19 +134,19 @@ JSON has several benefits when it comes to configuration:
 
 In order to use these files in the best way possible, this is our understanding of how these files will be used:
 
-- We will use a Heirarchical Config engine on the usage side. Java projects can use Typesafe Config, Node projects can use [nconf](https://github.com/flatiron/nconf)
+- We will use a Hierarchical Config engine on the usage side. Java projects can use Typesafe Config, Node projects can use [nconf](https://github.com/flatiron/nconf)
 - There will be an ops-controlled file that takes highest priority. This will probably be called ```secrets.conf```. This is the place we will store sensitive data, such as passwords, api keys, and auth tokens. These files will be unreadable to any user except the owner of the process and the root user. 
 - The engines will load the environment-specific file first, then use the defaults config as a fallback. This file will be readable by any user with login rights. 
 - The application will query environment variables to discover the current environment, then load that file. The rest of the application should be ignorant of the environment. 
 - We allow developers to specify configuration overrides locally. 
 
-The upshot of all of this, in heirarchical terms, results in loading files and resolving values in this order: 
+The upshot of all of this, in hierarchical terms, results in loading files and resolving values in this order: 
 
 0. From the environment and command line parameters. 
 1. From ${user.home}/.config-local.json
-2. From /opt/cmates/config/{env}/secret.json (if env is available)
-3. From /opt/cmates/config/{env}/config.json (if env is available)
-4. From /opt/cmates/config/default/config.json
+2. From /opt/config/{env}/secret.json (if env is available)
+3. From /opt/config/{env}/config.json (if env is available)
+4. From /opt/config/default/config.json
 
 In order to do overrides through the environment or command line, use dotted notation. For example, to replace the db host in our examples above, you could do something like this: 
 
