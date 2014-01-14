@@ -1,6 +1,7 @@
 import com.typesafe.config.*;
 
 apply plugin: 'base'
+apply plugin: 'js'
 
 buildscript {
     repositories {
@@ -10,6 +11,7 @@ buildscript {
         classpath('com.typesafe:config:1.1.0-9f31d6308e7ebbc3d7904b64ebb9f61f7e22a968') {
             exclude(group: 'com.typesafe.sbteclipse')
         }
+        classpath('com.eriwen:gradle-js-plugin:1.9.0')
     }
 }
 
@@ -21,7 +23,7 @@ ext {
     artifactId = "config-json"
     environments = ['default', 'dev', 'qa', 'stage', 'prod']
     bundles = fileTree(dir: 'src/main/bundles', include: '*.conf').files*.name*.replace('.conf', '')
-    workOutputFile = file("build/work/work.conf")
+    workOutputFile = file("${buildDir}/work/work.conf")
     resolvePartial = ConfigResolveOptions.defaults().setAllowUnresolved(true)
 }
 
@@ -32,7 +34,7 @@ task bundle (dependsOn: 'generate', type: Tar) {
     description = "Creates the final tar.gz archive of the generated config files"
     compression = Compression.GZIP
     into "${artifactId}-${version}"
-    from("$buildDir") {
+    from("${buildDir}") {
         exclude "distributions"
         exclude "work"
     }
@@ -52,7 +54,7 @@ environments.each { env ->
 
     // Generate the full config for this environment
     task "gen_${env}_full"(dependsOn: 'mergeConfigFiles') {
-        ext.outputFile = file("build/${env}/config.json")
+        ext.outputFile = file("${buildDir}/${env}/config.json")
 
         inputs.file(workOutputFile)
         outputs.file(outputFile)
@@ -60,7 +62,7 @@ environments.each { env ->
         doLast {
             def config = ConfigFactory.parseFile(workOutputFile)
             def envConfig = config.hasPath(env) ? config.getConfig(env) : ConfigFactory.empty()
-            envConfig = envConfig.withFallback(config.getConfig('default')).resolve(resolvePartial)
+            envConfig = envConfig.withFallback(config.getConfig('default')).resolve(resolvePartial).resolveWith(config, resolvePartial)
 
             outputFile.write(pretty(envConfig))
         }
@@ -76,8 +78,8 @@ environments.each { env ->
     bundles.each { bundle -> 
         task "gen_${env}_bundle_${bundle}"(dependsOn: "gen_${env}_full") {
             ext.bundleFile = file("src/main/bundles/${bundle}.conf")
-            ext.inputFile = file("build/${env}/config.json")
-            ext.outputFile = file("build/${env}/${bundle}.json")
+            ext.inputFile = file("${buildDir}/${env}/config.json")
+            ext.outputFile = file("${buildDir}/${env}/${bundle}.json")
 
             inputs.files(bundleFile, inputFile)
             outputs.file(outputFile)
@@ -114,30 +116,37 @@ environments.each { env ->
 
 task createWorkingDirectories {
     environments.each { 
-        outputs.file(file("build/${it}"))
+        outputs.file(file("${buildDir}/${it}"))
     }
 
     doLast {
         environments.each { 
-            file("build/${it}").mkdirs()
+            file("${buildDir}/${it}").mkdirs()
         }
     }
 }
 
-task mergeConfigFiles(dependsOn: 'createWorkingDirectories') {
-    ext.allFiles = fileTree(dir: 'src/main/conf', include: '*.conf')
-    ext.outputFile = workOutputFile
-
-    inputs.files(allFiles)
-    outputs.file(outputFile)
+task mergeConfigFiles(dependsOn: 'createWorkingDirectories', type: com.eriwen.gradle.js.tasks.CombineJsTask) {
+    source = fileTree(dir: 'src/main/conf', include: '*.conf')
+    dest = workOutputFile
 
     doLast {
-        ant.concat(destfile: outputFile, fixlastline: 'yes') {
-            allFiles.each {
-                fileset(file: it)
-            }
-        }
+        workOutputFile.append("\ndefault {\n    configVersion: ${version}\n}\n\n")
     }
+}
+
+jshint {  
+    // Depends on our generation task
+    tasks.jshint.dependsOn 'generate'
+
+    // This plugin has a weird naming issue (http://forums.gradle.org/gradle/topics/gradle_js_plugin)
+    // Prefixing config with tasks.jshint seems to fix it. 
+    tasks.jshint.source = fileTree(dir: buildDir, include: "**/*.json")
+    tasks.jshint.dest = file("${buildDir}/jshint.out")  
+    tasks.jshint.outputToStdOut = true  
+    tasks.jshint.ignoreExitCode = false
+
+    jshint.options = [expr: "true", unused: "true"]  
 }
 
 def pretty(Config config) {
