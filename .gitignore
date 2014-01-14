@@ -2,6 +2,9 @@
 .gradle/
 build/
 
+# Node stuff
+node_modules/
+
 # IntelliJ generated files
 .idea/
 *.iml
