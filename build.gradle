@@ -8,15 +8,13 @@ buildscript {
         mavenCentral()
     }
     dependencies {
-        classpath('com.typesafe:config:1.1.0-9f31d6308e7ebbc3d7904b64ebb9f61f7e22a968') {
-            exclude(group: 'com.typesafe.sbteclipse')
-        }
+        classpath('com.typesafe:config:1.2.0')
         classpath('com.eriwen:gradle-js-plugin:1.9.0')
     }
 }
 
 version = buildVersion
-group = "com.dev9.github.jsonconfig"
+group = "com.github.dev9com.jsonconfig"
 description = "dev9 configuration compiler"
     
 ext {
